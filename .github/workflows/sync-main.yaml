@@ -1,0 +1,34 @@
+name: Sync Fork
+
+on:
+  schedule:
+    # Runs daily at midnight (UTC). Adjust the cron as needed.
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows you to manually trigger this workflow.
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Fork
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false # Prevents the fork's token from being used
+
+      # Add the upstream repository
+      - name: Add Upstream Remote
+        run: |
+          git remote add upstream https://github.com/FlightControl-Master/MOOSE_INCLUDE.git
+          git fetch upstream
+          git checkout master
+          git merge upstream/master
+
+      # Push changes to the fork
+      - name: Push Changes to Fork
+        run: |
+          git push origin master
+        env:
+          # Use a GitHub token for authentication
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
