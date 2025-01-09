@@ -1,34 +1,58 @@
-name: Sync Fork
+name: 'Upstream Sync'
 
 on:
   schedule:
-    # Runs daily at midnight (UTC). Adjust the cron as needed.
-    - cron: '0 0 * * *'
-  workflow_dispatch: # Allows you to manually trigger this workflow.
+    - cron:  '0 7 * * 1,4'
+    # scheduled at 07:00 every Monday and Thursday
+
+  workflow_dispatch:  # click the button on Github repo!
+    inputs:
+      sync_test_mode: # Adds a boolean option that appears during manual workflow run for easy test mode config
+        description: 'Fork Sync Test Mode'
+        type: boolean
+        default: false
 
 jobs:
-  sync:
+  sync_latest_from_upstream:
     runs-on: ubuntu-latest
+    name: Sync latest commits from upstream repo
 
     steps:
-      # Checkout the repository
-      - name: Checkout Fork
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: false # Prevents the fork's token from being used
+    # REQUIRED step
+    # Step 1: run a standard checkout action, provided by github
+    - name: Checkout target repo
+      uses: actions/checkout@v3
+      with:
+        # optional: set the branch to checkout,
+        # sync action checks out your 'target_sync_branch' anyway
+        # ref:  my-branch
+        # REQUIRED if your upstream repo is private (see wiki)
+        persist-credentials: false
 
-      # Add the upstream repository
-      - name: Add Upstream Remote
-        run: |
-          git remote add upstream https://github.com/FlightControl-Master/MOOSE_INCLUDE.git
-          git fetch upstream
-          git checkout master
-          git merge upstream/master
+    # REQUIRED step
+    # Step 2: run the sync action
+    - name: Sync upstream changes
+      id: sync
+      uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+      with:
+        target_sync_branch: master
+        # REQUIRED 'target_repo_token' exactly like this!
+        target_repo_token: ${{ secrets.APT_TOKEN }}
+        upstream_sync_branch: master
+        upstream_sync_repo: FlightControl-Master/MOOSE_INCLUDE
+        # upstream_repo_access_token: ${{ secrets.UPSTREAM_REPO_SECRET }}
 
-      # Push changes to the fork
-      - name: Push Changes to Fork
-        run: |
-          git push origin master
-        env:
-          # Use a GitHub token for authentication
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        # Set test_mode true during manual dispatch to run tests instead of the true action!!
+        test_mode: ${{ inputs.sync_test_mode }}
+      
+    # Step 3: Display a sample message based on the sync output var 'has_new_commits'
+    - name: New commits found
+      if: steps.sync.outputs.has_new_commits == 'true'
+      run: echo "New commits were found to sync."
+    
+    - name: No new commits
+      if: steps.sync.outputs.has_new_commits == 'false'
+      run: echo "There were no new commits."
+      
+    - name: Show value of 'has_new_commits'
+      run: echo ${{ steps.sync.outputs.has_new_commits }}
